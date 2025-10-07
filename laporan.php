@@ -5,9 +5,10 @@ $tanggal_laporan = $_GET['tanggal'] ?? date('Y-m-d');
 $laporan_data = [];
 $is_data_otomatis = false;
 
-$sql = "SELECT km.nama_kegiatan, km.waktu_standar, lk.status, lk.timestamp_update
+$sql = "SELECT km.nama_kegiatan, a.nama_alat, km.waktu_standar, lk.status, lk.timestamp_update, lk.komentar
         FROM log_kegiatan lk
         JOIN kegiatan_master km ON lk.kegiatan_id = km.kegiatan_id
+        LEFT JOIN alat a ON km.alat_id = a.alat_id
         WHERE lk.tanggal = ?
         ORDER BY km.urutan ASC";
 
@@ -17,14 +18,21 @@ $laporan_data = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 if (empty($laporan_data) && $tanggal_laporan < date('Y-m-d')) {
     $is_data_otomatis = true;
-    $result_kegiatan_master = $conn->query("SELECT nama_kegiatan, waktu_standar FROM kegiatan_master ORDER BY urutan ASC");
+    $result_kegiatan_master = $conn->query(
+        "SELECT km.nama_kegiatan, km.waktu_standar, a.nama_alat 
+         FROM kegiatan_master km
+         LEFT JOIN alat a ON km.alat_id = a.alat_id
+         ORDER BY km.urutan ASC"
+    );
     if ($result_kegiatan_master) {
         $rows = $result_kegiatan_master->fetchAll(PDO::FETCH_ASSOC);
         foreach ($rows as $row) {
             $laporan_data[] = [
                 'nama_kegiatan' => $row['nama_kegiatan'],
+                'nama_alat' => $row['nama_alat'],
                 'waktu_standar' => $row['waktu_standar'],
                 'status' => 'Lewat',
+                'komentar' => null,
                 'timestamp_update' => $tanggal_laporan . ' 23:59:59'
             ];
         }
@@ -44,7 +52,7 @@ if (empty($laporan_data) && $tanggal_laporan < date('Y-m-d')) {
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
 </head>
 <body>
-    <div class="mahasiswa-layout">
+    <div class="layout">
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-top-section">
                 <button class="sidebar-toggle" id="sidebarToggle" aria-label="Toggle Sidebar"><i class="fas fa-bars"></i></button>
@@ -57,10 +65,8 @@ if (empty($laporan_data) && $tanggal_laporan < date('Y-m-d')) {
                 </ul>
             </nav>
         </aside>
-
         <main class="main-content" id="mainContent">
             <header class="header"><h1>Laporan Histori Kegiatan Operasional</h1></header>
-
             <section class="content-card">
                 <h2><i class="fas fa-search"></i> Lihat Laporan Berdasarkan Tanggal</h2>
                 <form action="laporan.php" method="GET" class="filter-form">
@@ -71,23 +77,23 @@ if (empty($laporan_data) && $tanggal_laporan < date('Y-m-d')) {
                     <button type="submit" class="submit btn-filter-action"><i class="fas fa-eye"></i> Tampilkan Laporan</button>
                     <a href="laporan.php" class="btn-filter-action btn-reset-filter"><i class="fas fa-calendar-day"></i> Laporan Hari Ini</a>
                 </form>
-
                 <?php if($is_data_otomatis): ?>
-                <div class="info-box" style="margin-top: 20px; border-left-color: #ff9800;">
+                <div class="info-box warning">
                     <h4><i class="fas fa-exclamation-triangle"></i> Catatan</h4>
                     <p>Tidak ada data yang disimpan pada tanggal ini. Sistem secara otomatis menampilkan semua status sebagai <strong>"Lewat"</strong>.</p>
                 </div>
                 <?php endif; ?>
-
-                <h2 style="margin-top: 30px;"><i class="fas fa-file-alt"></i> Hasil Laporan untuk Tanggal: <?php echo date('d F Y', strtotime($tanggal_laporan)); ?></h2>
+                <h2 class="mt-30"><i class="fas fa-file-alt"></i> Hasil Laporan untuk Tanggal: <?php echo date('d F Y', strtotime($tanggal_laporan)); ?></h2>
                 <div style="overflow-x: auto;">
                     <table class="activity-table">
                         <thead>
                             <tr>
-                                <th style="width: 50px;">No.</th>
+                                <th class="col-nomor">No.</th>
                                 <th>Nama Kegiatan</th>
+                                <th>Alat Terkait</th>
                                 <th>Waktu Standar</th>
                                 <th>Status</th>
+                                <th>Komentar</th>
                                 <th>Terakhir Diperbarui</th>
                             </tr>
                         </thead>
@@ -101,14 +107,17 @@ if (empty($laporan_data) && $tanggal_laporan < date('Y-m-d')) {
                                             case 'Belum': $status_class = 'status-belum'; break;
                                             case 'Terlambat': $status_class = 'status-terlambat'; break;
                                             case 'Lewat': $status_class = 'status-tidak-dilaksanakan'; break;
+                                            case 'Rusak': $status_class = 'status-tidak-dilaksanakan'; break;
                                             case 'Libur': $status_class = 'status-belum'; break;
                                         }
                                     ?>
                                     <tr>
                                         <td><?php echo $nomor++; ?></td>
                                         <td><?php echo htmlspecialchars($laporan['nama_kegiatan']); ?></td>
+                                        <td><?php echo $laporan['nama_alat'] ? htmlspecialchars($laporan['nama_alat']) : '-'; ?></td>
                                         <td><?php echo date('H:i', strtotime($laporan['waktu_standar'])); ?></td>
                                         <td class="<?php echo $status_class; ?>"><?php echo htmlspecialchars($laporan['status']); ?></td>
+                                        <td><?php echo htmlspecialchars($laporan['komentar'] ?? '-'); ?></td>
                                         <td>
                                             <?php
                                                 if ($is_data_otomatis) {
@@ -121,7 +130,7 @@ if (empty($laporan_data) && $tanggal_laporan < date('Y-m-d')) {
                                     </tr>
                                 <?php endforeach; ?>
                             <?php else: ?>
-                                <tr><td colspan="5" style="text-align:center;">Tidak ada data kegiatan untuk tanggal yang dipilih.</td></tr>
+                                <tr><td colspan="7" class="text-center">Tidak ada data kegiatan untuk tanggal yang dipilih.</td></tr>
                             <?php endif; ?>
                         </tbody>
                     </table>

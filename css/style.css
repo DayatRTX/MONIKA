@@ -27,7 +27,7 @@ body.preload-no-transitions .main-content {
 }
 
 /* --- Layout Utama --- */
-.mahasiswa-layout {
+.layout {
   display: flex;
   min-height: 100vh;
 }
@@ -480,4 +480,156 @@ body.preload-no-transitions .main-content {
   .info-box h4 {
     font-size: 1.1em;
   }
+}
+
+.activity-table .col-status {
+  min-width: 550px;
+}
+.activity-table .col-waktu {
+  width: 150px;
+}
+.activity-table .col-nomor {
+  width: 50px;
+}
+
+.radio-group {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+}
+.radio-group label {
+  white-space: nowrap;
+  margin-right: 15px;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+.radio-group input[type="radio"] {
+  margin-right: 5px;
+}
+.radio-group input[type="radio"]:disabled + label {
+  cursor: not-allowed;
+  color: #aaa;
+}
+.komentar-input {
+  display: block;
+  margin-top: 10px;
+  width: 100%;
+  padding: 8px;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+  box-sizing: border-box;
+}
+
+.notification-banner {
+  background-color: #ffc107;
+  color: #333;
+  padding: 15px;
+  margin-bottom: 20px;
+  border-radius: 5px;
+  border-left: 5px solid #d39e00;
+}
+.notification-banner h4 {
+  margin-top: 0;
+  color: #5b4f0c;
+}
+.notification-banner .actions button {
+  margin-right: 10px;
+  padding: 5px 10px;
+  border: none;
+  cursor: pointer;
+  border-radius: 4px;
+  background-color: #333;
+  color: white;
+}
+.notification-banner .actions button:hover {
+  background-color: #555;
+}
+
+.info-box.warning {
+  border-left-color: #ff9800;
+}
+
+.form-submit-button {
+  text-align: right;
+  margin-top: 20px;
+}
+
+.submit-button-auto {
+  width: auto;
+  padding: 10px 20px;
+}
+
+/* === Gaya Notifikasi Modal dan Highlight Baris (Tambahan Baru) === */
+
+/* Overlay untuk modal */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.6);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 2000;
+}
+
+/* Konten modal */
+.modal-content {
+  background-color: var(--white-color);
+  padding: 30px;
+  border-radius: 8px;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+  width: 90%;
+  max-width: 500px;
+  text-align: center;
+}
+
+.modal-content h4 {
+  color: #c82333;
+  margin-top: 0;
+  font-size: 1.5em;
+}
+
+.modal-content p {
+  margin: 15px 0;
+  font-size: 1.1em;
+}
+
+.modal-content .actions form {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.modal-content .actions button {
+  border: none;
+  padding: 10px 20px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-weight: bold;
+  color: white;
+}
+
+.btn-rusak-total {
+  background-color: #c82333;
+}
+.btn-perbaikan {
+  background-color: #e0a800;
+}
+.btn-diperbaiki {
+  background-color: #218838;
+}
+
+/* Highlight untuk baris pada tabel kegiatan */
+.activity-table tr.alat-rusak-total {
+  background-color: #f8d7da !important; /* Merah muda */
+  color: #721c24;
+}
+
+.activity-table tr.alat-perbaikan {
+  background-color: #fff3cd !important; /* Kuning muda */
+  color: #856404;
 }

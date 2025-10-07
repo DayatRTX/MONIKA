@@ -46,21 +46,46 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   }
 
+  function handleAlatRusakTotal() {
+    const rusakRows = document.querySelectorAll("tr.alat-rusak-total");
+    rusakRows.forEach((row) => {
+      const radioButtons = row.querySelectorAll(".status-radio");
+      const komentarInput = row.querySelector(".komentar-input");
+
+      radioButtons.forEach((radio) => {
+        if (radio.value !== "Rusak") {
+          radio.disabled = true;
+        } else {
+          // Jika radio "Rusak" belum terpilih, pilih dan simpan otomatis.
+          if (!radio.checked) {
+            radio.checked = true;
+            saveData(radio); // PERBAIKAN: Panggil saveData di sini
+          }
+          radio.disabled = false;
+        }
+      });
+
+      if (komentarInput) {
+        komentarInput.placeholder = "Alat ini ditandai rusak total.";
+      }
+    });
+  }
+
   const monitoringForm = document.getElementById("monitoringForm");
   if (monitoringForm) {
+    // Panggil handleAlatRusakTotal setelah mendefinisikan monitoringForm
+    handleAlatRusakTotal();
+
     function checkActivityTimes() {
       const now = new Date();
       const activityRows = monitoringForm.querySelectorAll("tbody tr");
 
       activityRows.forEach((row) => {
-        const radioButtons = row.querySelectorAll('input[type="radio"]');
-        const radioSelesai = row.querySelector(
-          'input[type="radio"][value="Selesai"]'
-        );
-        const radioBelum = row.querySelector(
-          'input[type="radio"][value="Belum"]'
-        );
+        if (row.classList.contains("alat-rusak-total")) {
+          return;
+        }
 
+        const radioButtons = row.querySelectorAll('input[type="radio"]');
         let isCompleted = false;
         radioButtons.forEach((radio) => {
           if (radio.value === "Selesai" && radio.checked) {
@@ -75,26 +100,33 @@ document.addEventListener("DOMContentLoaded", function () {
           return;
         }
 
-        if (radioSelesai) {
+        const radioSelesai = row.querySelector(
+          'input[type="radio"][value="Selesai"]'
+        );
+        const radioBelum = row.querySelector(
+          'input[type="radio"][value="Belum"]'
+        );
+
+        if (radioSelesai && radioBelum) {
+          radioSelesai.disabled = false;
+          radioBelum.disabled = false;
+
           const waktuStandarStr =
             radioSelesai.getAttribute("data-waktu-standar");
           if (!waktuStandarStr) return;
 
-          const [hours, minutes, seconds] = waktuStandarStr.split(":");
+          const [hours, minutes] = waktuStandarStr.split(":");
           const waktuStandarDate = new Date();
-          waktuStandarDate.setHours(hours, minutes, seconds, 0);
+          waktuStandarDate.setHours(hours, minutes, 0, 0);
 
           const deadlineDate = new Date(
             waktuStandarDate.getTime() + 60 * 60 * 1000
           );
-
           const isOverdue = now > deadlineDate;
 
           if (isOverdue) {
             radioSelesai.disabled = true;
-            if (radioBelum) {
-              radioBelum.disabled = true;
-            }
+            radioBelum.disabled = true;
 
             const checkedRadio = row.querySelector(
               'input[type="radio"]:checked'
@@ -105,13 +137,8 @@ document.addEventListener("DOMContentLoaded", function () {
               );
               if (radioLewat) {
                 radioLewat.checked = true;
-                saveSingleChange(radioLewat);
+                saveData(radioLewat);
               }
-            }
-          } else {
-            radioSelesai.disabled = false;
-            if (radioBelum) {
-              radioBelum.disabled = false;
             }
           }
         }
@@ -121,22 +148,32 @@ document.addEventListener("DOMContentLoaded", function () {
     checkActivityTimes();
     setInterval(checkActivityTimes, 30000);
 
-    function saveSingleChange(radioInput) {
-      const formData = new FormData();
-      formData.append(radioInput.name, radioInput.value);
-      const params = new URLSearchParams(formData);
+    function saveData(inputElement) {
+      const name = inputElement.name;
+      const value = inputElement.value;
+      const data = `${encodeURIComponent(name)}=${encodeURIComponent(value)}`;
+
       fetch("config/autosave.php", {
         method: "POST",
-        body: params,
-      });
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: data,
+      }).catch((error) => console.error("Autosave failed:", error));
     }
 
     monitoringForm.addEventListener("change", function (event) {
-      if (event.target.type === "radio") {
-        saveSingleChange(event.target);
+      if (event.target.classList.contains("status-radio")) {
+        saveData(event.target);
       }
     });
 
-    monitoringForm.addEventListener("submit", function (e) {});
+    let debounceTimer;
+    monitoringForm.addEventListener("input", function (event) {
+      if (event.target.classList.contains("komentar-input")) {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+          saveData(event.target);
+        }, 1000);
+      }
+    });
   }
 });
