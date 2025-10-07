@@ -180,7 +180,7 @@ $notifikasi_list = $stmt_notifikasi->fetchAll(PDO::FETCH_ASSOC);
     </div>
     <?php endif; ?>
 
-    <div class="mahasiswa-layout">
+    <div class="layout">
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-top-section">
                 <button class="sidebar-toggle" id="sidebarToggle" aria-label="Toggle Sidebar"><i class="fas fa-bars"></i></button>
