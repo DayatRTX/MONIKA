@@ -1,8 +1,6 @@
 <?php
-// File: index.php (Final Stabil)
 require_once 'config/db.php';
 
-// --- LOGIKA PENGISIAN OTOMATIS (Lazy Cron) ---
 try {
     $stmt_first_date = $conn->query("SELECT MIN(tanggal) as first_date FROM log_kegiatan");
     $first_log_date_str = $stmt_first_date->fetchColumn();
@@ -44,15 +42,13 @@ try {
             }
         }
     }
-} catch (PDOException $e) { /* Abaikan */ }
-// --- AKHIR LOGIKA PENGISIAN OTOMATIS ---
+} catch (PDOException $e) {}
 
 
 $today = date('Y-m-d');
 $success_message = '';
 $error_message = '';
 
-// Handle form submission "Simpan Status"
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['simpan_status'])) {
     if (isset($_POST['status'])) {
         $statuses = $_POST['status'];
@@ -76,7 +72,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['simpan_status'])) {
     }
 }
 
-// Ambil data kegiatan
 $stmt_kegiatan_master = $conn->query("SELECT kegiatan_id, nama_kegiatan, waktu_standar FROM kegiatan_master ORDER BY urutan ASC");
 $kegiatan_list_raw = $stmt_kegiatan_master->fetchAll(PDO::FETCH_ASSOC);
 $kegiatan_list = [];
@@ -84,7 +79,6 @@ foreach ($kegiatan_list_raw as $row) {
     $kegiatan_list[$row['kegiatan_id']] = $row;
 }
 
-// Ambil log hari ini
 $log_hari_ini = [];
 $stmt_log = $conn->prepare("SELECT kegiatan_id, status FROM log_kegiatan WHERE tanggal = ?");
 $stmt_log->execute([$today]);

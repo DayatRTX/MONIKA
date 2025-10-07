@@ -8,7 +8,6 @@ document.addEventListener("DOMContentLoaded", function () {
     body.classList.add("preload-no-transitions");
   }
 
-  // Logika untuk sidebar
   if (sidebar && mainContent && sidebarToggle) {
     let sidebarIsCollapsed =
       localStorage.getItem("sidebarCollapsed") !== "false";
@@ -51,13 +50,15 @@ document.addEventListener("DOMContentLoaded", function () {
   if (monitoringForm) {
     function checkActivityTimes() {
       const now = new Date();
-
       const activityRows = monitoringForm.querySelectorAll("tbody tr");
 
       activityRows.forEach((row) => {
         const radioButtons = row.querySelectorAll('input[type="radio"]');
         const radioSelesai = row.querySelector(
           'input[type="radio"][value="Selesai"]'
+        );
+        const radioBelum = row.querySelector(
+          'input[type="radio"][value="Belum"]'
         );
 
         let isCompleted = false;
@@ -91,6 +92,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
           if (isOverdue) {
             radioSelesai.disabled = true;
+            if (radioBelum) {
+              radioBelum.disabled = true;
+            }
 
             const checkedRadio = row.querySelector(
               'input[type="radio"]:checked'
@@ -101,10 +105,14 @@ document.addEventListener("DOMContentLoaded", function () {
               );
               if (radioLewat) {
                 radioLewat.checked = true;
+                saveSingleChange(radioLewat);
               }
             }
           } else {
             radioSelesai.disabled = false;
+            if (radioBelum) {
+              radioBelum.disabled = false;
+            }
           }
         }
       });
@@ -113,22 +121,22 @@ document.addEventListener("DOMContentLoaded", function () {
     checkActivityTimes();
     setInterval(checkActivityTimes, 30000);
 
-    // Logika Autosave
-    let formChanged = false;
-    monitoringForm.addEventListener("change", function () {
-      formChanged = true;
-    });
+    function saveSingleChange(radioInput) {
+      const formData = new FormData();
+      formData.append(radioInput.name, radioInput.value);
+      const params = new URLSearchParams(formData);
+      fetch("config/autosave.php", {
+        method: "POST",
+        body: params,
+      });
+    }
 
-    monitoringForm.addEventListener("submit", function () {
-      formChanged = false;
-    });
-
-    window.addEventListener("beforeunload", function (event) {
-      if (formChanged) {
-        const formData = new FormData(monitoringForm);
-        const params = new URLSearchParams(formData);
-        navigator.sendBeacon("config/autosave.php", params.toString());
+    monitoringForm.addEventListener("change", function (event) {
+      if (event.target.type === "radio") {
+        saveSingleChange(event.target);
       }
     });
+
+    monitoringForm.addEventListener("submit", function (e) {});
   }
 });

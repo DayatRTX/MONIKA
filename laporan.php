@@ -1,12 +1,10 @@
 <?php
-// File: laporan.php (Final dengan PDO dan Zona Waktu)
 require_once 'config/db.php';
 
 $tanggal_laporan = $_GET['tanggal'] ?? date('Y-m-d');
 $laporan_data = [];
 $is_data_otomatis = false;
 
-// Query untuk mengambil data log
 $sql = "SELECT km.nama_kegiatan, km.waktu_standar, lk.status, lk.timestamp_update
         FROM log_kegiatan lk
         JOIN kegiatan_master km ON lk.kegiatan_id = km.kegiatan_id
@@ -17,7 +15,6 @@ $stmt = $conn->prepare($sql);
 $stmt->execute([$tanggal_laporan]);
 $laporan_data = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// Logika jika tidak ada data dan tanggalnya sudah lewat
 if (empty($laporan_data) && $tanggal_laporan < date('Y-m-d')) {
     $is_data_otomatis = true;
     $result_kegiatan_master = $conn->query("SELECT nama_kegiatan, waktu_standar FROM kegiatan_master ORDER BY urutan ASC");
@@ -117,7 +114,6 @@ if (empty($laporan_data) && $tanggal_laporan < date('Y-m-d')) {
                                                 if ($is_data_otomatis) {
                                                     echo '(Data Otomatis)';
                                                 } else {
-                                                    // Waktu dari database sudah dalam zona waktu yang benar (WIB)
                                                     echo date('d M Y, H:i:s', strtotime($laporan['timestamp_update']));
                                                 }
                                             ?>

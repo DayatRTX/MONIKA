@@ -1,5 +1,4 @@
 <?php
-// File: config/autosave.php (Final dengan PDO)
 require_once 'db.php';
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
