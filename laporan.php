@@ -1,12 +1,12 @@
 <?php
-// File: laporan.php (Pembaruan teks minor)
+// File: laporan.php (Final dengan PDO dan Zona Waktu)
 require_once 'config/db.php';
 
 $tanggal_laporan = $_GET['tanggal'] ?? date('Y-m-d');
 $laporan_data = [];
 $is_data_otomatis = false;
 
-// Query untuk mengambil data log berdasarkan tanggal yang dipilih
+// Query untuk mengambil data log
 $sql = "SELECT km.nama_kegiatan, km.waktu_standar, lk.status, lk.timestamp_update
         FROM log_kegiatan lk
         JOIN kegiatan_master km ON lk.kegiatan_id = km.kegiatan_id
@@ -14,28 +14,20 @@ $sql = "SELECT km.nama_kegiatan, km.waktu_standar, lk.status, lk.timestamp_updat
         ORDER BY km.urutan ASC";
 
 $stmt = $conn->prepare($sql);
-if ($stmt) {
-    $stmt->bind_param("s", $tanggal_laporan);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    while ($row = $result->fetch_assoc()) {
-        $laporan_data[] = $row;
-    }
-    $stmt->close();
-} else {
-    die("Error preparing statement: " . $conn->error);
-}
+$stmt->execute([$tanggal_laporan]);
+$laporan_data = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// Logika jika tidak ada data dan tanggalnya sudah lewat, generate laporan otomatis
+// Logika jika tidak ada data dan tanggalnya sudah lewat
 if (empty($laporan_data) && $tanggal_laporan < date('Y-m-d')) {
     $is_data_otomatis = true;
     $result_kegiatan_master = $conn->query("SELECT nama_kegiatan, waktu_standar FROM kegiatan_master ORDER BY urutan ASC");
     if ($result_kegiatan_master) {
-        while ($row = $result_kegiatan_master->fetch_assoc()) {
+        $rows = $result_kegiatan_master->fetchAll(PDO::FETCH_ASSOC);
+        foreach ($rows as $row) {
             $laporan_data[] = [
                 'nama_kegiatan' => $row['nama_kegiatan'],
                 'waktu_standar' => $row['waktu_standar'],
-                'status' => 'Lewat', // Diubah
+                'status' => 'Lewat',
                 'timestamp_update' => $tanggal_laporan . ' 23:59:59'
             ];
         }
@@ -53,7 +45,6 @@ if (empty($laporan_data) && $tanggal_laporan < date('Y-m-d')) {
         rel="stylesheet">
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-    <script> var js_initial_sidebar_force_closed = false; </script>
 </head>
 <body>
     <div class="mahasiswa-layout">
@@ -112,7 +103,7 @@ if (empty($laporan_data) && $tanggal_laporan < date('Y-m-d')) {
                                             case 'Selesai': $status_class = 'status-selesai'; break;
                                             case 'Belum': $status_class = 'status-belum'; break;
                                             case 'Terlambat': $status_class = 'status-terlambat'; break;
-                                            case 'Lewat': $status_class = 'status-tidak-dilaksanakan'; break; // Menggunakan class lama, bisa diubah jika perlu
+                                            case 'Lewat': $status_class = 'status-tidak-dilaksanakan'; break;
                                             case 'Libur': $status_class = 'status-belum'; break;
                                         }
                                     ?>
@@ -121,7 +112,16 @@ if (empty($laporan_data) && $tanggal_laporan < date('Y-m-d')) {
                                         <td><?php echo htmlspecialchars($laporan['nama_kegiatan']); ?></td>
                                         <td><?php echo date('H:i', strtotime($laporan['waktu_standar'])); ?></td>
                                         <td class="<?php echo $status_class; ?>"><?php echo htmlspecialchars($laporan['status']); ?></td>
-                                        <td><?php echo $is_data_otomatis ? '(Data Otomatis)' : date('d M Y, H:i:s', strtotime($laporan['timestamp_update'])); ?></td>
+                                        <td>
+                                            <?php
+                                                if ($is_data_otomatis) {
+                                                    echo '(Data Otomatis)';
+                                                } else {
+                                                    // Waktu dari database sudah dalam zona waktu yang benar (WIB)
+                                                    echo date('d M Y, H:i:s', strtotime($laporan['timestamp_update']));
+                                                }
+                                            ?>
+                                        </td>
                                     </tr>
                                 <?php endforeach; ?>
                             <?php else: ?>

@@ -1,40 +1,50 @@
 <?php
-// File: index.php (Diperbarui dengan batas waktu 1 jam)
+// File: index.php (Final Stabil)
 require_once 'config/db.php';
 
-// --- LOGIKA PENGISIAN OTOMATIS UNTUK HARI YANG TERLEWAT (Lazy Cron) ---
-$last_log_date_str = null;
-$result_last_date = $conn->query("SELECT MAX(tanggal) as last_date FROM log_kegiatan");
-if ($result_last_date && $result_last_date->num_rows > 0) {
-    $last_log_date_str = $result_last_date->fetch_assoc()['last_date'];
-}
+// --- LOGIKA PENGISIAN OTOMATIS (Lazy Cron) ---
+try {
+    $stmt_first_date = $conn->query("SELECT MIN(tanggal) as first_date FROM log_kegiatan");
+    $first_log_date_str = $stmt_first_date->fetchColumn();
 
-if ($last_log_date_str) {
-    $start_date = new DateTime($last_log_date_str);
-    $yesterday = new DateTime('yesterday');
+    if ($first_log_date_str) {
+        $start_date = new DateTime($first_log_date_str);
+        $yesterday = new DateTime('yesterday');
 
-    if ($start_date < $yesterday) {
-        $start_date->modify('+1 day');
-        $date_range = new DatePeriod($start_date, new DateInterval('P1D'), $yesterday->modify('+1 day'));
-        
-        $kegiatan_master_ids = [];
-        $result_master = $conn->query("SELECT kegiatan_id FROM kegiatan_master");
-        while ($row = $result_master->fetch_assoc()) { $kegiatan_master_ids[] = $row['kegiatan_id']; }
+        if ($start_date <= $yesterday) {
+            $date_range = new DatePeriod($start_date, new DateInterval('P1D'), $yesterday->modify('+1 day'));
+            
+            $stmt_master = $conn->query("SELECT kegiatan_id FROM kegiatan_master");
+            $kegiatan_master_ids = $stmt_master->fetchAll(PDO::FETCH_COLUMN);
+            $total_kegiatan_master = count($kegiatan_master_ids);
 
-        if (!empty($kegiatan_master_ids)) {
-            // Menggunakan ON DUPLICATE KEY UPDATE untuk mencegah error jika data sudah ada
-            $stmt_auto_fill = $conn->prepare("INSERT INTO log_kegiatan (kegiatan_id, tanggal, status) VALUES (?, ?, 'Lewat') ON DUPLICATE KEY UPDATE status=status");
-            foreach ($date_range as $date) {
-                $date_str = $date->format('Y-m-d');
-                foreach ($kegiatan_master_ids as $kegiatan_id) {
-                    $stmt_auto_fill->bind_param("is", $kegiatan_id, $date_str);
-                    $stmt_auto_fill->execute();
+            if ($total_kegiatan_master > 0) {
+                $stmt_check = $conn->prepare("SELECT kegiatan_id FROM log_kegiatan WHERE tanggal = ?");
+                $stmt_fill = $conn->prepare("INSERT INTO log_kegiatan (kegiatan_id, tanggal, status) VALUES (?, ?, 'Lewat') ON DUPLICATE KEY UPDATE status=status");
+
+                foreach ($date_range as $date) {
+                    $date_str = $date->format('Y-m-d');
+                    
+                    $stmt_check->execute([$date_str]);
+                    $logged_ids = $stmt_check->fetchAll(PDO::FETCH_COLUMN);
+                    $log_count = count($logged_ids);
+                    
+                    if ($log_count > 0 && $log_count < $total_kegiatan_master) {
+                        $unfilled_ids = array_diff($kegiatan_master_ids, $logged_ids);
+                        foreach ($unfilled_ids as $kegiatan_id) {
+                            $stmt_fill->execute([$kegiatan_id, $date_str]);
+                        }
+                    } 
+                    else if ($log_count == 0) {
+                        foreach ($kegiatan_master_ids as $kegiatan_id) {
+                            $stmt_fill->execute([$kegiatan_id, $date_str]);
+                        }
+                    }
                 }
             }
-            if (isset($stmt_auto_fill)) $stmt_auto_fill->close();
         }
     }
-}
+} catch (PDOException $e) { /* Abaikan */ }
 // --- AKHIR LOGIKA PENGISIAN OTOMATIS ---
 
 
@@ -42,50 +52,45 @@ $today = date('Y-m-d');
 $success_message = '';
 $error_message = '';
 
-// Handle form submission
+// Handle form submission "Simpan Status"
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['simpan_status'])) {
-    $statuses = $_POST['status'];
-    $conn->begin_transaction();
-    try {
-        foreach ($statuses as $kegiatan_id => $status) {
-            $kegiatan_id = intval($kegiatan_id);
+    if (isset($_POST['status'])) {
+        $statuses = $_POST['status'];
+        try {
+            $conn->beginTransaction();
             $stmt = $conn->prepare(
                 "INSERT INTO log_kegiatan (kegiatan_id, tanggal, status) VALUES (?, ?, ?)
                  ON DUPLICATE KEY UPDATE status = VALUES(status)"
             );
-            if (!$stmt) throw new Exception($conn->error);
-            $stmt->bind_param("iss", $kegiatan_id, $today, $status);
-            if (!$stmt->execute()) throw new Exception($stmt->error);
-            $stmt->close();
+            foreach ($statuses as $kegiatan_id => $status) {
+                $stmt->execute([intval($kegiatan_id), $today, $status]);
+            }
+            $conn->commit();
+            $success_message = "Status kegiatan berhasil disimpan!";
+        } catch (Exception $e) {
+            $conn->rollBack();
+            $error_message = "Terjadi kesalahan saat menyimpan data: " . $e->getMessage();
         }
-        $conn->commit();
-        $success_message = "Status kegiatan untuk tanggal " . date('d F Y') . " berhasil disimpan!";
-    } catch (Exception $e) {
-        $conn->rollback();
-        $error_message = "Terjadi kesalahan saat menyimpan data: " . $e->getMessage();
+    } else {
+        $error_message = "Tidak ada status yang dipilih untuk disimpan.";
     }
 }
 
 // Ambil data kegiatan
+$stmt_kegiatan_master = $conn->query("SELECT kegiatan_id, nama_kegiatan, waktu_standar FROM kegiatan_master ORDER BY urutan ASC");
+$kegiatan_list_raw = $stmt_kegiatan_master->fetchAll(PDO::FETCH_ASSOC);
 $kegiatan_list = [];
-$result_kegiatan_master = $conn->query("SELECT kegiatan_id, nama_kegiatan, waktu_standar FROM kegiatan_master ORDER BY urutan ASC");
-if ($result_kegiatan_master) {
-    while ($row = $result_kegiatan_master->fetch_assoc()) {
-        $kegiatan_list[$row['kegiatan_id']] = $row;
-    }
+foreach ($kegiatan_list_raw as $row) {
+    $kegiatan_list[$row['kegiatan_id']] = $row;
 }
 
 // Ambil log hari ini
 $log_hari_ini = [];
 $stmt_log = $conn->prepare("SELECT kegiatan_id, status FROM log_kegiatan WHERE tanggal = ?");
-if ($stmt_log) {
-    $stmt_log->bind_param("s", $today);
-    $stmt_log->execute();
-    $result_log = $stmt_log->get_result();
-    while ($row = $result_log->fetch_assoc()) {
-        $log_hari_ini[$row['kegiatan_id']] = $row['status'];
-    }
-    $stmt_log->close();
+$stmt_log->execute([$today]);
+$log_rows = $stmt_log->fetchAll(PDO::FETCH_ASSOC);
+foreach ($log_rows as $row) {
+    $log_hari_ini[$row['kegiatan_id']] = $row['status'];
 }
 
 $status_options = ['Belum', 'Selesai', 'Terlambat', 'Lewat', 'Libur'];
@@ -103,7 +108,7 @@ $status_options = ['Belum', 'Selesai', 'Terlambat', 'Lewat', 'Libur'];
     <style>
         .radio-group label { margin-right: 15px; cursor: pointer; transition: color 0.2s; }
         .radio-group input[type="radio"] { margin-right: 5px; }
-        .radio-group input[type="radio"]:disabled + label { cursor: not-allowed; color: #aaa; text-decoration: line-through; }
+        .radio-group input[type="radio"]:disabled + label { cursor: not-allowed; color: #aaa; }
     </style>
 </head>
 <body>
@@ -150,7 +155,7 @@ $status_options = ['Belum', 'Selesai', 'Terlambat', 'Lewat', 'Libur'];
                                 <?php if (!empty($kegiatan_list)): $nomor = 1; ?>
                                     <?php foreach ($kegiatan_list as $id => $kegiatan): ?>
                                         <?php
-                                            $current_status = $log_hari_ini[$id] ?? 'Belum';
+                                            $current_status = $log_hari_ini[$id] ?? null;
                                         ?>
                                         <tr>
                                             <td><?php echo $nomor++; ?></td>
@@ -159,12 +164,12 @@ $status_options = ['Belum', 'Selesai', 'Terlambat', 'Lewat', 'Libur'];
                                             <td>
                                                 <div class="radio-group">
                                                     <?php foreach ($status_options as $status_option): ?>
-                                                        <input type="radio" 
+                                                        <input type="radio"
                                                                id="status_<?php echo $id; ?>_<?php echo str_replace(' ', '_', $status_option); ?>"
-                                                               name="status[<?php echo $id; ?>]" 
+                                                               name="status[<?php echo $id; ?>]"
                                                                value="<?php echo $status_option; ?>"
                                                                <?php if ($status_option == 'Selesai') echo 'data-waktu-standar="' . $kegiatan['waktu_standar'] . '"'; ?>
-                                                               <?php echo ($current_status == $status_option) ? 'checked' : ''; ?>>
+                                                               <?php if ($current_status !== null && $current_status == $status_option) echo 'checked'; ?>>
                                                         <label for="status_<?php echo $id; ?>_<?php echo str_replace(' ', '_', $status_option); ?>">
                                                             <?php echo $status_option; ?>
                                                         </label>

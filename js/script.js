@@ -8,9 +8,10 @@ document.addEventListener("DOMContentLoaded", function () {
     body.classList.add("preload-no-transitions");
   }
 
+  // Logika untuk sidebar
   if (sidebar && mainContent && sidebarToggle) {
     let sidebarIsCollapsed =
-      localStorage.getItem("sidebarCollapsed") === "true";
+      localStorage.getItem("sidebarCollapsed") !== "false";
 
     const icon = sidebarToggle.querySelector("i");
     if (sidebarIsCollapsed) {
@@ -48,47 +49,69 @@ document.addEventListener("DOMContentLoaded", function () {
 
   const monitoringForm = document.getElementById("monitoringForm");
   if (monitoringForm) {
-    // Fungsi untuk memeriksa dan menonaktifkan status 'Selesai'
     function checkActivityTimes() {
       const now = new Date();
 
-      const radioSelesai = document.querySelectorAll(
-        'input[type="radio"][value="Selesai"]'
-      );
+      const activityRows = monitoringForm.querySelectorAll("tbody tr");
 
-      radioSelesai.forEach((radio) => {
-        const waktuStandarStr = radio.getAttribute("data-waktu-standar");
-
-        const [hours, minutes, seconds] = waktuStandarStr.split(":");
-        const waktuStandarDate = new Date();
-        waktuStandarDate.setHours(hours, minutes, seconds, 0);
-
-        const deadlineDate = new Date(
-          waktuStandarDate.getTime() + 60 * 60 * 1000
+      activityRows.forEach((row) => {
+        const radioButtons = row.querySelectorAll('input[type="radio"]');
+        const radioSelesai = row.querySelector(
+          'input[type="radio"][value="Selesai"]'
         );
 
-        const isOverdue = now > deadlineDate;
-
-        if (isOverdue) {
-          radio.disabled = true;
-
-          if (radio.checked) {
-            const activityId = radio.name.match(/\[(\d+)\]/)[1];
-            const radioLewat = document.querySelector(
-              `input[name="status[${activityId}]"][value="Lewat"]`
-            );
-            if (radioLewat) {
-              radioLewat.checked = true;
-            }
+        let isCompleted = false;
+        radioButtons.forEach((radio) => {
+          if (radio.value === "Selesai" && radio.checked) {
+            isCompleted = true;
           }
-        } else {
-          radio.disabled = false;
+        });
+
+        if (isCompleted) {
+          radioButtons.forEach((radio) => {
+            radio.disabled = true;
+          });
+          return;
+        }
+
+        if (radioSelesai) {
+          const waktuStandarStr =
+            radioSelesai.getAttribute("data-waktu-standar");
+          if (!waktuStandarStr) return;
+
+          const [hours, minutes, seconds] = waktuStandarStr.split(":");
+          const waktuStandarDate = new Date();
+          waktuStandarDate.setHours(hours, minutes, seconds, 0);
+
+          const deadlineDate = new Date(
+            waktuStandarDate.getTime() + 60 * 60 * 1000
+          );
+
+          const isOverdue = now > deadlineDate;
+
+          if (isOverdue) {
+            radioSelesai.disabled = true;
+
+            const checkedRadio = row.querySelector(
+              'input[type="radio"]:checked'
+            );
+            if (!checkedRadio || checkedRadio.value === "Belum") {
+              const radioLewat = row.querySelector(
+                'input[type="radio"][value="Lewat"]'
+              );
+              if (radioLewat) {
+                radioLewat.checked = true;
+              }
+            }
+          } else {
+            radioSelesai.disabled = false;
+          }
         }
       });
     }
 
     checkActivityTimes();
-    setInterval(checkActivityTimes, 30000); // Cek setiap 30 detik
+    setInterval(checkActivityTimes, 30000);
 
     // Logika Autosave
     let formChanged = false;
@@ -96,11 +119,14 @@ document.addEventListener("DOMContentLoaded", function () {
       formChanged = true;
     });
 
+    monitoringForm.addEventListener("submit", function () {
+      formChanged = false;
+    });
+
     window.addEventListener("beforeunload", function (event) {
       if (formChanged) {
         const formData = new FormData(monitoringForm);
         const params = new URLSearchParams(formData);
-        // Pastikan path ini benar jika autosave.php dipindah
         navigator.sendBeacon("config/autosave.php", params.toString());
       }
     });
