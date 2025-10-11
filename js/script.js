@@ -56,10 +56,9 @@ document.addEventListener("DOMContentLoaded", function () {
         if (radio.value !== "Rusak") {
           radio.disabled = true;
         } else {
-          // Jika radio "Rusak" belum terpilih, pilih dan simpan otomatis.
           if (!radio.checked) {
             radio.checked = true;
-            saveData(radio); // PERBAIKAN: Panggil saveData di sini
+            saveData(radio);
           }
           radio.disabled = false;
         }
@@ -73,7 +72,6 @@ document.addEventListener("DOMContentLoaded", function () {
 
   const monitoringForm = document.getElementById("monitoringForm");
   if (monitoringForm) {
-    // Panggil handleAlatRusakTotal setelah mendefinisikan monitoringForm
     handleAlatRusakTotal();
 
     function checkActivityTimes() {

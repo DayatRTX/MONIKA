@@ -2,6 +2,50 @@
 require_once 'config/db.php';
 
 try {
+    $stmt_alat_rusak = $conn->query(
+        "SELECT km.alat_id, a.nama_alat, COUNT(lk.log_id) as rusak_count
+         FROM log_kegiatan lk
+         JOIN kegiatan_master km ON lk.kegiatan_id = km.kegiatan_id
+         JOIN alat a ON km.alat_id = a.alat_id
+         WHERE lk.status = 'Rusak'
+         GROUP BY km.alat_id, a.nama_alat
+         HAVING rusak_count >= 3"
+    );
+
+    $alat_rusak_list = $stmt_alat_rusak->fetchAll(PDO::FETCH_ASSOC);
+
+    foreach ($alat_rusak_list as $alat) {
+        $alat_id = $alat['alat_id'];
+        $current_rusak_count = $alat['rusak_count'];
+        $nama_alat = $alat['nama_alat'];
+
+        $stmt_cek_aktif = $conn->prepare("SELECT notifikasi_id FROM notifikasi_alat_rusak WHERE alat_id = ? AND status_notifikasi = 'Aktif'");
+        $stmt_cek_aktif->execute([$alat_id]);
+        if ($stmt_cek_aktif->rowCount() > 0) {
+            continue;
+        }
+
+        $stmt_get_last_notif = $conn->prepare("SELECT pesan FROM notifikasi_alat_rusak WHERE alat_id = ? ORDER BY notifikasi_id DESC LIMIT 1");
+        $stmt_get_last_notif->execute([$alat_id]);
+        $last_pesan = $stmt_get_last_notif->fetchColumn();
+
+        $last_notif_rusak_count = 0;
+        if ($last_pesan && preg_match('/sebanyak (\d+) kali/', $last_pesan, $matches)) {
+            $last_notif_rusak_count = (int)$matches[1];
+        }
+
+        if ($current_rusak_count > $last_notif_rusak_count) {
+            $pesan = "Peringatan: Alat '$nama_alat' telah dilaporkan rusak sebanyak $current_rusak_count kali. Mohon segera diperiksa dan konfirmasi statusnya.";
+            $stmt_insert_notif = $conn->prepare("INSERT INTO notifikasi_alat_rusak (alat_id, pesan) VALUES (?, ?)");
+            $stmt_insert_notif->execute([$alat_id, $pesan]);
+        }
+    }
+} catch (PDOException $e) {
+    // Abaikan error jika terjadi pada blok pengecekan notifikasi otomatis
+}
+
+
+try {
     $stmt_first_date = $conn->query("SELECT MIN(tanggal) as first_date FROM log_kegiatan");
     $first_log_date_str = $stmt_first_date->fetchColumn();
     if ($first_log_date_str) {
@@ -76,32 +120,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['simpan_status'])) {
             foreach ($statuses as $kegiatan_id => $status) {
                 $komentar = $komentars[$kegiatan_id] ?? null;
                 $stmt->execute([intval($kegiatan_id), $today, $status, $komentar]);
-                if ($status == 'Rusak') {
-                    $stmt_alat = $conn->prepare("SELECT alat_id FROM kegiatan_master WHERE kegiatan_id = ?");
-                    $stmt_alat->execute([$kegiatan_id]);
-                    $alat_id = $stmt_alat->fetchColumn();
-                    if ($alat_id) {
-                        $stmt_rusak_count = $conn->prepare(
-                            "SELECT COUNT(*) FROM log_kegiatan lk 
-                             JOIN kegiatan_master km ON lk.kegiatan_id = km.kegiatan_id
-                             WHERE km.alat_id = ? AND lk.status = 'Rusak'"
-                        );
-                        $stmt_rusak_count->execute([$alat_id]);
-                        $rusak_count = $stmt_rusak_count->fetchColumn();
-                        if ($rusak_count >= 3) {
-                            $stmt_cek_notif = $conn->prepare("SELECT notifikasi_id FROM notifikasi_alat_rusak WHERE alat_id = ? AND status_notifikasi = 'Aktif'");
-                            $stmt_cek_notif->execute([$alat_id]);
-                            if ($stmt_cek_notif->rowCount() == 0) {
-                                $stmt_nama_alat = $conn->prepare("SELECT nama_alat FROM alat WHERE alat_id = ?");
-                                $stmt_nama_alat->execute([$alat_id]);
-                                $nama_alat = $stmt_nama_alat->fetchColumn();
-                                $pesan = "Peringatan: Alat '$nama_alat' telah dilaporkan rusak sebanyak $rusak_count kali. Mohon segera diperiksa dan konfirmasi statusnya.";
-                                $stmt_insert_notif = $conn->prepare("INSERT INTO notifikasi_alat_rusak (alat_id, pesan) VALUES (?, ?)");
-                                $stmt_insert_notif->execute([$alat_id, $pesan]);
-                            }
-                        }
-                    }
-                }
             }
             $conn->commit();
             header("Location: index.php?save=success");
