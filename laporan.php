@@ -56,7 +56,7 @@ if (empty($laporan_data) && $tanggal_laporan < date('Y-m-d')) {
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-top-section">
                 <button class="sidebar-toggle" id="sidebarToggle" aria-label="Toggle Sidebar"><i class="fas fa-bars"></i></button>
-                <div class="sidebar-header"><h3 class="logo-text">MONITORING</h3></div>
+                <div class="sidebar-header"><h3 class="logo-text">MONPERA</h3></div>
             </div>
             <nav class="sidebar-menu">
                 <ul>
